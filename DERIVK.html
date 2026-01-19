@@ -1,0 +1,317 @@
+<meta name='viewport' content='width=device-width, initial-scale=1'/><!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K.C.M MULTI-CUSTOM V19 - ULTIMATE</title>
+    <style>
+        :root { 
+            --neon-blue: #1e90ff; --neon-green: #00ff88; --neon-red: #ff3355; 
+            --gale: #f0b90b; --bg-dark: #05070a; --royal-blue: #0047AB;
+        }
+        body { background: var(--bg-dark); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; }
+        
+        /* DESIGN RECUPERADO DO PAINEL ON */
+        .painel-global { 
+            background: linear-gradient(180deg, #111418 0%, #05070a 100%); 
+            border: 2px solid var(--royal-blue); 
+            border-radius: 15px; 
+            width: 95%; 
+            max-width: 600px; 
+            padding: 15px; 
+            margin-bottom: 20px; 
+            box-shadow: 0 0 20px rgba(0,71,171,0.3);
+            text-align: center;
+        }
+        .header-title { font-size: 22px; font-weight: 900; margin-bottom: 15px; }
+        .header-title span { color: var(--neon-blue); font-style: italic; }
+        
+        .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+        .stat-card { background: rgba(255,255,255,0.05); padding: 10px; border-radius: 10px; border: 1px solid rgba(30,144,255,0.2); }
+        .stat-label { font-size: 9px; color: #888; text-transform: uppercase; display: block; margin-bottom: 5px; }
+        .stat-val { font-size: 18px; font-weight: bold; color: #fff; }
+
+        .grid-container { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; width: 100%; max-width: 600px; }
+        .card { background: #111418; border-radius: 20px; padding: 12px; border: 1px solid #1e2228; text-align: center; position: relative; transition: 0.3s; }
+        .card.active { border-color: var(--neon-blue); box-shadow: 0 0 10px rgba(30,144,255,0.3); }
+        
+        /* ESTILO DO TERMÔMETRO COM EFEITO NEON */
+        .termometro-wrap { width: 80%; height: 6px; background: #222; border-radius: 10px; margin: 8px auto; overflow: visible; border: 1px solid #333; position: relative; }
+        .termometro-fill { 
+            height: 100%; width: 50%; 
+            background: var(--neon-blue); 
+            border-radius: 10px;
+            transition: width 0.4s ease, background 0.4s ease, box-shadow 0.4s ease; 
+            box-shadow: 0 0 5px var(--neon-blue);
+        }
+        .forca-txt { font-size: 9px; font-weight: bold; color: #aaa; margin-top: 5px; display: block; }
+
+        .timer-large { font-size: 38px; font-weight: bold; color: #fff; margin: 5px 0; }
+        .status-badge { font-size: 10px; font-weight: bold; color: var(--neon-blue); padding: 4px 8px; background: rgba(30,144,255,0.1); border-radius: 5px; display: inline-block; }
+        
+        .select-ativo { background: #0d0f12; color: #fff; border: 1px solid #444; font-size: 11px; width: 100%; padding: 8px; margin-top: 10px; border-radius: 8px; }
+        
+        #historico-aba { width: 95%; max-width: 600px; background: #0d0f12; padding: 15px; border-radius: 10px; border: 1px solid #333; margin-top: 20px; }
+        .log-item { font-size: 11px; padding: 8px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; }
+        .btn-pdf { background: var(--royal-blue); color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; margin-top: 15px; width: 100%; font-weight: bold; text-transform: uppercase; }
+        
+        @media print { .btn-pdf, .select-ativo, .header-title { display: none; } }
+    </style>
+</head>
+<body>
+
+    <div class="painel-global">
+        <div class="header-title">K.C.M <span>MULTI-CUSTOM V19</span></div>
+        <div class="stats-row">
+            <div class="stat-card">
+                <span class="stat-label">📊 PLACAR GERAL</span>
+                <span class="stat-val" id="display-placar">0W - 0L</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">🎯 ASSERTIVIDADE</span>
+                <span class="stat-val" id="display-precisao">0%</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-label">🚫 ABORTADAS</span>
+                <span class="stat-val" id="display-abort">0</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid-container" id="grid"></div>
+
+    <div id="historico-aba">
+        <h3 style="color:var(--neon-blue); font-size: 14px; margin-top: 0; display: flex; align-items: center; gap: 8px;">
+            📅 HISTÓRICO DE RELATÓRIOS (PDF)
+        </h3>
+        <div id="log-relatorios" style="max-height: 250px; overflow-y: auto;">
+            <div class="log-item" style="color:#666">⏳ Aguardando processamento de mercado...</div>
+        </div>
+        <button class="btn-pdf" onclick="window.print()">📥 Gerar Histórico Diário (PDF)</button>
+    </div>
+
+<script>
+    const TG_TOKEN = "8427077212:AAEiL_3_D_-fukuaR95V3FqoYYyHvdCHmEI"; 
+    const TG_CHAT_ID = "-1003355965894"; 
+    const LINK_CORRETORA = "https://track.deriv.com/_S_W1N_"; 
+
+    const LISTA_ATIVOS_HTML = `
+        <optgroup label="🌍 FOREX">
+            <option value="frxEURUSD">EUR/USD</option>
+            <option value="frxGBPUSD">GBP/USD</option>
+            <option value="frxUSDJPY">USD/JPY</option>
+            <option value="frxAUDUSD">AUD/USD</option>
+            <option value="frxUSDCAD">USD/CAD</option>
+            <option value="frxUSDCHF">USD/CHF</option>
+            <option value="frxEURGBP">EUR/GBP</option>
+            <option value="frxEURJPY">EUR/JPY</option>
+            <option value="frxGBPJPY">GBP/JPY</option>
+            <option value="frxXAUUSD">OURO (XAU/USD)</option>
+            <option value="frxXAGUSD">PRATA (XAG/USD)</option>
+        </optgroup>
+        <optgroup label="₿ CRIPTOMOEDAS">
+            <option value="cryBTCUSD">BITCOIN (BTC)</option>
+            <option value="cryETHUSD">ETHEREUM (ETH)</option>
+            <option value="cryLTCUSD">LITECOIN (LTC)</option>
+            <option value="cryXRPUSD">RIPPLE (XRP)</option>
+        </optgroup>
+        <optgroup label="🔥 SINTÉTICOS">
+            <option value="1HZ10V">Volatility 10 (1s)</option>
+            <option value="1HZ25V">Volatility 25 (1s)</option>
+            <option value="1HZ50V">Volatility 50 (1s)</option>
+            <option value="1HZ75V">Volatility 75 (1s)</option>
+            <option value="1HZ100V">Volatility 100 (1s)</option>
+            <option value="R_10">Volatility 10</option>
+            <option value="R_25">Volatility 25</option>
+            <option value="R_50">Volatility 50</option>
+            <option value="R_75">Volatility 75</option>
+            <option value="R_100">Volatility 100</option>
+            <option value="BOOM500">Boom 500</option>
+            <option value="CRASH500">Crash 500</option>
+        </optgroup>`;
+
+    let stats = {
+        analises: 0, win: 0, loss: 0, g1: 0, g2: 0, abort: 0, 
+        inicioSessao: new Date().toLocaleTimeString(),
+        dataAtual: new Date().getDate()
+    };
+
+    let motores = {};
+
+    function getHora(offset = 0) {
+        let d = new Date();
+        d.setSeconds(d.getSeconds() + offset);
+        return d.toLocaleTimeString('pt-BR');
+    }
+
+    async function enviarTelegram(msg, comBotao = false) {
+        let payload = { chat_id: TG_CHAT_ID, text: msg, parse_mode: "Markdown" };
+        if (comBotao) payload.reply_markup = { inline_keyboard: [[{ text: "📲 OPERAR AGORA", url: LINK_CORRETORA }]] };
+        fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).catch(e => console.error(e));
+    }
+
+    // RELATÓRIOS AUTOMÁTICOS COM EMOJIS CONFORME A IMAGEM
+    setInterval(() => {
+        let precisao = stats.analises > 0 ? ((stats.win / (stats.win + stats.loss)) * 100).toFixed(1) : 0;
+        let msg = `📊 *RELATÓRIO DE DESEMPENHO*\n\n` +
+                  `• 📈 Análises: ${stats.analises}\n` +
+                  `• 💎 Win Direto: ${stats.win - stats.g1 - stats.g2}\n` +
+                  `• 🔋 Win G1: ${stats.g1} | Win G2: ${stats.g2}\n` +
+                  `• 🔴 Loss Total: ${stats.loss}\n` +
+                  `• ⚠️ Abortadas: ${stats.abort}\n` +
+                  `• 🎯 Assertividade: ${precisao}%\n` +
+                  `• 🕒 Início: ${stats.inicioSessao}`;
+        enviarTelegram(msg);
+        
+        let log = document.getElementById('log-relatorios');
+        if(log.innerText.includes("Aguardando")) log.innerHTML = "";
+        log.innerHTML = `<div class="log-item"><span>🕒 [${new Date().toLocaleTimeString()}] Relatório Periódico</span> <b>✅ ${stats.win}W - ❌ ${stats.loss}L</b></div>` + log.innerHTML;
+    }, 240000);
+
+    setInterval(() => {
+        let ranking = Object.values(motores).sort((a,b) => b.wins - a.wins);
+        let lider = ranking[0] ? ranking[0].nome : "---";
+        enviarTelegram(`📢 *BALANÇO PARCIAL*\n\n🏆 Ativo em Destaque: ${lider}\n🎯 Total de Entradas: ${stats.analises}\n✅ Placar Geral: ${stats.win}W - ${stats.loss}L`);
+    }, 180000);
+
+    function criarCards() {
+        const grid = document.getElementById('grid');
+        const padrao = ['1HZ100V', 'R_100', 'frxEURUSD', 'cryBTCUSD'];
+        grid.innerHTML = "";
+        for (let i = 1; i <= 4; i++) {
+            const id = `card${i}`;
+            grid.innerHTML += `<div class="card" id="cont-${id}">
+                <div class="status-badge" id="status-${id}">📡 MONITORANDO</div>
+                <div class="termometro-wrap"><div class="termometro-fill" id="fill-${id}"></div></div>
+                <span class="forca-txt" id="txt-${id}">FORÇA: 50%</span>
+                <div class="timer-large" id="timer-${id}">00</div>
+                <div id="msg-box-${id}" style="font-size:9px; height:15px; color:#555">⏳ Aguardando vela</div>
+                <select class="select-ativo" id="select-${id}" onchange="mudarAtivo('${id}')">${LISTA_ATIVOS_HTML}</select>
+            </div>`;
+            setTimeout(() => { document.getElementById(`select-${id}`).value = padrao[i-1]; mudarAtivo(id); }, 200 * i);
+        }
+    }
+
+    function mudarAtivo(id) {
+        const select = document.getElementById(`select-${id}`);
+        const ativo = select.value, nome = select.options[select.selectedIndex].text;
+        if (motores[id]?.ws) motores[id].ws.close();
+        
+        motores[id] = { nome, wins: 0, loss: 0, forca: 50, abertura: 0, estagio: 0, operacaoAtiva: false, gale: 0 };
+        let m = motores[id];
+        let ws = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=1089');
+        m.ws = ws;
+
+        ws.onopen = () => ws.send(JSON.stringify({ ticks: ativo }));
+        ws.onmessage = (msg) => {
+            let data = JSON.parse(msg.data); if (!data.tick) return;
+            let preco = data.tick.quote, segs = new Date().getSeconds();
+            document.getElementById(`timer-${id}`).innerText = (60 - segs).toString().padStart(2, '0');
+
+            if (m.abertura > 0) {
+                m.forca = 50 + ((preco - m.abertura) / (m.abertura * 0.0002) * 20);
+                m.forca = Math.min(98, Math.max(2, m.forca));
+                
+                // Atualização Visual do Termômetro com Efeito Neon Realçado
+                const bar = document.getElementById(`fill-${id}`);
+                const txt = document.getElementById(`txt-${id}`);
+                bar.style.width = m.forca + "%";
+                txt.innerText = `FORÇA: ${m.forca.toFixed(0)}%`;
+                
+                if(m.forca >= 70) {
+                    bar.style.background = "var(--neon-green)";
+                    bar.style.boxShadow = "0 0 15px var(--neon-green)";
+                } else if(m.forca <= 30) {
+                    bar.style.background = "var(--neon-red)";
+                    bar.style.boxShadow = "0 0 15px var(--neon-red)";
+                } else {
+                    bar.style.background = "var(--neon-blue)";
+                    bar.style.boxShadow = "0 0 8px var(--neon-blue)";
+                }
+            }
+
+            // GATILHO 1: ANALISANDO (00s)
+            if (segs === 0 && !m.operacaoAtiva) {
+                m.abertura = preco;
+                m.estagio = 1;
+                let dir = m.forca > 50 ? "COMPRA 🟢" : "VENDA 🔴";
+                enviarTelegram(`🔍 *BUSCANDO TAXA...*\n📊 *Ativo:* ${m.nome}\n⚡ *Direção:* ${dir}`);
+                document.getElementById(`status-${id}`).innerText = "🔍 ANALISANDO";
+                document.getElementById(`cont-${id}`).classList.add('active');
+            }
+
+            // GATILHO 2: AGUARDANDO (02s)
+            if (m.estagio === 1 && segs === 2) {
+                if (m.forca >= 70 || m.forca <= 30) {
+                    m.estagio = 2;
+                    let dir = m.forca >= 70 ? "COMPRA 🟢" : "VENDA 🔴";
+                    enviarTelegram(`⏳ *AGUARDANDO CONFIRMAÇÃO*\n• Ativo: ${m.nome}\n• Alvo: ${getHora()}`);
+                    document.getElementById(`status-${id}`).innerText = "⏳ AGUARDANDO";
+                } else {
+                    enviarTelegram(`⚠️ *OPERAÇÃO ABORTADA*\n• Ativo: ${m.nome}\n(Força fora do padrão)`);
+                    stats.abort++;
+                    m.estagio = 0;
+                    document.getElementById(`status-${id}`).innerText = "📡 MONITORANDO";
+                    document.getElementById(`cont-${id}`).classList.remove('active');
+                    atualizarPainel();
+                }
+            }
+
+            // GATILHO 3: CONFIRMADA (Retração de Taxa)
+            if (m.estagio === 2 && segs > 5 && segs < 30) {
+                m.estagio = 0;
+                m.operacaoAtiva = true;
+                m.direcaoSinal = m.forca >= 70 ? "COMPRA 🟢" : "VENDA 🔴";
+                m.precoEntrada = preco;
+                enviarTelegram(`🚀 *ENTRADA CONFIRMADA*\n👉 *CLIQUE AGORA*\n\n💎 Ativo: ${m.nome}\n📈 Ação: ${m.direcaoSinal}\n⏰ Início: ${getHora()}\n🏁 Fim: ${getHora(60)}`, true);
+                document.getElementById(`status-${id}`).innerText = "💰 OPERANDO";
+                setTimeout(() => verificarResultado(id, preco), (60 - segs) * 1000);
+            }
+        };
+    }
+
+    function verificarResultado(id, precoAtual) {
+        let m = motores[id];
+        if (!m.operacaoAtiva) return;
+        let win = (m.direcaoSinal.includes("COMPRA") && precoAtual > m.precoEntrada) || (m.direcaoSinal.includes("VENDA") && precoAtual < m.precoEntrada);
+
+        if (win) {
+            stats.win++; m.wins++;
+            if (m.gale === 1) stats.g1++; if (m.gale === 2) stats.g2++;
+            enviarTelegram(`✅ *GREEN: 📈 ${m.nome}*\n🏆 *Resultado:* ${m.gale > 0 ? 'GALE '+m.gale : 'DIRETO'}\n📊 ATIVO: ${m.wins}W - ${m.loss}L\n🌍 GLOBAL: ${stats.win}W - ${stats.loss}L`);
+            m.operacaoAtiva = false; m.gale = 0;
+            document.getElementById(`status-${id}`).innerText = "💹 GREEN";
+            document.getElementById(`cont-${id}`).classList.remove('active');
+        } else {
+            if (m.gale < 2) {
+                m.gale++;
+                enviarTelegram(`🔄 *GALE ${m.gale}:* ${m.nome}\n⏰ Início: ${getHora()}\n🏁 Fim: ${getHora(60)}`);
+                document.getElementById(`status-${id}`).innerText = "♻️ GALE " + m.gale;
+                setTimeout(() => verificarResultado(id, precoAtual), 60000);
+            } else {
+                stats.loss++; m.loss++;
+                enviarTelegram(`❌ *LOSS FINAL NO G2*\n💎 *Ativo:* ${m.nome}\n📊 ATIVO: ${m.wins}W - ${m.loss}L\n🌍 GLOBAL: ${stats.win}W - ${stats.loss}L`);
+                m.operacaoAtiva = false; m.gale = 0;
+                document.getElementById(`status-${id}`).innerText = "🛑 LOSS";
+                document.getElementById(`cont-${id}`).classList.remove('active');
+            }
+        }
+        stats.analises++;
+        atualizarPainel();
+    }
+
+    function atualizarPainel() {
+        document.getElementById('display-placar').innerText = `${stats.win}W - ${stats.loss}L`;
+        document.getElementById('display-abort').innerText = stats.abort;
+        let total = stats.win + stats.loss;
+        let precisao = total > 0 ? ((stats.win / total) * 100).toFixed(0) : 0;
+        document.getElementById('display-precisao').innerText = precisao + "%";
+    }
+
+    window.onload = criarCards;
+</script>
+</body>
+</html>
