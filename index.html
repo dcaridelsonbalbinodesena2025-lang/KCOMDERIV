@@ -11,7 +11,6 @@
         }
         body { background: var(--bg-dark); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; }
         
-        /* DESIGN RECUPERADO DO PAINEL ON */
         .painel-global { 
             background: linear-gradient(180deg, #111418 0%, #05070a 100%); 
             border: 2px solid var(--royal-blue); 
@@ -35,7 +34,6 @@
         .card { background: #111418; border-radius: 20px; padding: 12px; border: 1px solid #1e2228; text-align: center; position: relative; transition: 0.3s; }
         .card.active { border-color: var(--neon-blue); box-shadow: 0 0 10px rgba(30,144,255,0.3); }
         
-        /* ESTILO DO TERMÔMETRO COM EFEITO NEON */
         .termometro-wrap { width: 80%; height: 6px; background: #222; border-radius: 10px; margin: 8px auto; overflow: visible; border: 1px solid #333; position: relative; }
         .termometro-fill { 
             height: 100%; width: 50%; 
@@ -153,7 +151,6 @@
         }).catch(e => console.error(e));
     }
 
-    // RELATÓRIOS AUTOMÁTICOS COM EMOJIS CONFORME A IMAGEM
     setInterval(() => {
         let precisao = stats.analises > 0 ? ((stats.win / (stats.win + stats.loss)) * 100).toFixed(1) : 0;
         let msg = `📊 *RELATÓRIO DE DESEMPENHO*\n\n` +
@@ -200,22 +197,45 @@
         const ativo = select.value, nome = select.options[select.selectedIndex].text;
         if (motores[id]?.ws) motores[id].ws.close();
         
-        motores[id] = { nome, wins: 0, loss: 0, forca: 50, abertura: 0, estagio: 0, operacaoAtiva: false, gale: 0 };
+        motores[id] = { 
+            nome, wins: 0, loss: 0, forca: 50, abertura: 0, 
+            estagio: 0, operacaoAtiva: false, gale: 0, 
+            corpoVelaAnterior: 0, precoFechamentoAnterior: 0, taxaAlvo: 0 
+        };
+        
         let m = motores[id];
         let ws = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=1089');
         m.ws = ws;
 
-        ws.onopen = () => ws.send(JSON.stringify({ ticks: ativo }));
+        ws.onopen = () => {
+            ws.send(JSON.stringify({ ticks: ativo }));
+            // Solicita histórico para calcular a vela anterior
+            ws.send(JSON.stringify({ ticks_history: ativo, end: "latest", count: 2, adjust_start_time: 1 }));
+        };
+
         ws.onmessage = (msg) => {
-            let data = JSON.parse(msg.data); if (!data.tick) return;
+            let data = JSON.parse(msg.data);
+
+            if (data.history) {
+                let p = data.history.prices;
+                m.corpoVelaAnterior = Math.abs(p[p.length-1] - p[p.length-2]);
+                m.precoFechamentoAnterior = p[p.length-1];
+                return;
+            }
+
+            if (!data.tick) return;
             let preco = data.tick.quote, segs = new Date().getSeconds();
             document.getElementById(`timer-${id}`).innerText = (60 - segs).toString().padStart(2, '0');
+
+            // 1. CÁLCULO DA FORÇA DO MERCADO (Baseado na abertura da vela atual)
+            if (segs === 0) {
+                m.abertura = preco;
+            }
 
             if (m.abertura > 0) {
                 m.forca = 50 + ((preco - m.abertura) / (m.abertura * 0.0002) * 20);
                 m.forca = Math.min(98, Math.max(2, m.forca));
                 
-                // Atualização Visual do Termômetro com Efeito Neon Realçado
                 const bar = document.getElementById(`fill-${id}`);
                 const txt = document.getElementById(`txt-${id}`);
                 bar.style.width = m.forca + "%";
@@ -233,25 +253,28 @@
                 }
             }
 
-            // GATILHO 1: ANALISANDO (00s)
+            // GATILHO 1: BUSCANDO TAXA (00s)
             if (segs === 0 && !m.operacaoAtiva) {
-                m.abertura = preco;
                 m.estagio = 1;
-                let dir = m.forca > 50 ? "COMPRA 🟢" : "VENDA 🔴";
+                let dir = m.forca >= 50 ? "COMPRA 🟢" : "VENDA 🔴";
                 enviarTelegram(`🔍 *BUSCANDO TAXA...*\n📊 *Ativo:* ${m.nome}\n⚡ *Direção:* ${dir}`);
                 document.getElementById(`status-${id}`).innerText = "🔍 ANALISANDO";
                 document.getElementById(`cont-${id}`).classList.add('active');
             }
 
-            // GATILHO 2: AGUARDANDO (02s)
-            if (m.estagio === 1 && segs === 2) {
+            // GATILHO 2: AGUARDANDO CONFIRMAÇÃO (Recuo de 30% da vela anterior)
+            if (m.estagio === 1 && segs === 1) {
                 if (m.forca >= 70 || m.forca <= 30) {
                     m.estagio = 2;
-                    let dir = m.forca >= 70 ? "COMPRA 🟢" : "VENDA 🔴";
-                    enviarTelegram(`⏳ *AGUARDANDO CONFIRMAÇÃO*\n• Ativo: ${m.nome}\n• Alvo: ${getHora()}`);
+                    const recuo = m.corpoVelaAnterior * 0.30;
+                    // Se for Compra, espera o preço recuar (cair) 30% da vela anterior abaixo da abertura
+                    // Se for Venda, espera o preço recuar (subir) 30% da vela anterior acima da abertura
+                    m.taxaAlvo = m.forca >= 70 ? (m.abertura - recuo) : (m.abertura + recuo);
+                    
+                    enviarTelegram(`⏳ *AGUARDANDO CONFIRMAÇÃO*\n• Ativo: ${m.nome}\n• Força: ${m.forca.toFixed(0)}%\n• Aguardando Recuo (Taxa)`);
                     document.getElementById(`status-${id}`).innerText = "⏳ AGUARDANDO";
                 } else {
-                    enviarTelegram(`⚠️ *OPERAÇÃO ABORTADA*\n• Ativo: ${m.nome}\n(Força fora do padrão)`);
+                    enviarTelegram(`⚠️ *OPERAÇÃO ABORTADA*\n• Ativo: ${m.nome}\n(Força Insuficiente: ${m.forca.toFixed(0)}%)`);
                     stats.abort++;
                     m.estagio = 0;
                     document.getElementById(`status-${id}`).innerText = "📡 MONITORANDO";
@@ -260,15 +283,29 @@
                 }
             }
 
-            // GATILHO 3: CONFIRMADA (Retração de Taxa)
-            if (m.estagio === 2 && segs > 5 && segs < 30) {
+            // GATILHO 3: ENTRADA CONFIRMADA (Bateu na Taxa de Recuo)
+            if (m.estagio === 2 && segs > 1 && segs <= 30) {
+                let bateuTaxa = (m.forca >= 70 && preco <= m.taxaAlvo) || (m.forca <= 30 && preco >= m.taxaAlvo);
+                
+                if (bateuTaxa) {
+                    m.estagio = 0;
+                    m.operacaoAtiva = true;
+                    m.direcaoSinal = m.forca >= 70 ? "COMPRA 🟢" : "VENDA 🔴";
+                    m.precoEntrada = preco;
+                    enviarTelegram(`🚀 *ENTRADA CONFIRMADA*\n👉 *CLIQUE AGORA*\n\n💎 Ativo: ${m.nome}\n📈 Ação: ${m.direcaoSinal}\n⏰ Início: ${getHora()}\n🏁 Fim: ${getHora(60)}`, true);
+                    document.getElementById(`status-${id}`).innerText = "💰 OPERANDO";
+                    setTimeout(() => verificarResultado(id, preco), (60 - segs) * 1000);
+                }
+            }
+
+            // FILTRO: ABORTAR SE NÃO BATER NA TAXA ATÉ OS 30s
+            if (m.estagio === 2 && segs > 30) {
+                enviarTelegram(`⚠️ *OPERAÇÃO ABORTADA*\n• Ativo: ${m.nome}\n(Preço não atingiu o recuo esperado)`);
+                stats.abort++;
                 m.estagio = 0;
-                m.operacaoAtiva = true;
-                m.direcaoSinal = m.forca >= 70 ? "COMPRA 🟢" : "VENDA 🔴";
-                m.precoEntrada = preco;
-                enviarTelegram(`🚀 *ENTRADA CONFIRMADA*\n👉 *CLIQUE AGORA*\n\n💎 Ativo: ${m.nome}\n📈 Ação: ${m.direcaoSinal}\n⏰ Início: ${getHora()}\n🏁 Fim: ${getHora(60)}`, true);
-                document.getElementById(`status-${id}`).innerText = "💰 OPERANDO";
-                setTimeout(() => verificarResultado(id, preco), (60 - segs) * 1000);
+                document.getElementById(`status-${id}`).innerText = "📡 MONITORANDO";
+                document.getElementById(`cont-${id}`).classList.remove('active');
+                atualizarPainel();
             }
         };
     }
